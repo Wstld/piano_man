@@ -1,4 +1,8 @@
-use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
+use std::collections::{HashMap, HashSet};
+use std::hash::{self, Hash, Hasher};
+
+use maplit::hashmap;
 
 #[derive(Debug)]
 pub enum Octave {
@@ -9,7 +13,7 @@ pub enum Octave {
     C5,
     C6,
 }
-#[derive(Debug, Eq, Hash, PartialEq)]
+#[derive(Debug, Eq, Hash, PartialEq, PartialOrd, Ord, Clone, Copy)]
 pub enum Note {
     A,
     ASharpBFlat,
@@ -24,7 +28,7 @@ pub enum Note {
     G,
     GsharpAflat,
 }
-
+#[derive(Debug)]
 pub enum Chord {
     C,
     Cm,
@@ -41,26 +45,70 @@ pub enum Chord {
     B,
     Bm,
 }
+#[derive(Debug, Eq, PartialEq)]
+struct ThreeNoteChord(u64);
 
-fn generate_chord_map() {
-    //sepparate chords in lengths.
-    // grab notes, sort, turn in to hashkeys (or wrapper with own haseher imp).
+impl Hash for ThreeNoteChord {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state)
+    }
+}
 
-    //iterate over combinations starting from most notes down to fewest.
-    // access function.
-    // takes n of notes and uses same hasher to access in the map.
+impl ThreeNoteChord {
+    fn new(notes: [&Note; 3]) -> Self {
+        let mut hahser = DefaultHasher::new();
+        let mut sorted_notes = notes;
+        sorted_notes.sort();
+        sorted_notes.iter().for_each(|note| note.hash(&mut hahser));
+        ThreeNoteChord(hahser.finish())
+    }
+}
 
-    let mut map: HashMap<[Note; 3], Chord> = HashMap::new();
-    map.insert([Note::C, Note::E, Note::G], Chord::C);
-    map.insert([Note::C, Note::DsharpEflat, Note::G], Chord::Cm);
-    map.insert([Note::D, Note::FsharpGflat, Note::A], Chord::D);
-    map.insert([Note::D, Note::F, Note::A], Chord::Dm);
-    map.insert([Note::E, Note::GsharpAflat, Note::B], Chord::E);
-    map.insert([Note::E, Note::G, Note::B], Chord::Em);
-    map.insert([Note::F, Note::A, Note::C], Chord::F);
-    map.insert([Note::F, Note::GsharpAflat, Note::C], Chord::Fm);
-    map.insert([Note::G, Note::B, Note::D], Chord::G);
-    map.insert([Note::G, Note::ASharpBFlat, Note::D], Chord::Gm);
-    map.insert([Note::A, Note::CsharpDflat, Note::E], Chord::A);
-    map.insert([Note::A, Note::C, Note::E], Chord::Am);
+fn generate_chord_map() -> HashMap<ThreeNoteChord, Chord> {
+    hashmap! {
+        ThreeNoteChord::new([&Note::C, &Note::E, &Note::G]) => Chord::C,
+        ThreeNoteChord::new([&Note::C, &Note::DsharpEflat, &Note::G]) => Chord::Cm,
+        ThreeNoteChord::new([&Note::D, &Note::FsharpGflat, &Note::A]) => Chord::D,
+        ThreeNoteChord::new([&Note::D, &Note::F, &Note::A]) => Chord::Dm,
+        ThreeNoteChord::new([&Note::E, &Note::GsharpAflat, &Note::B]) => Chord::E,
+        ThreeNoteChord::new([&Note::E, &Note::G, &Note::B]) => Chord::Em,
+        ThreeNoteChord::new([&Note::F, &Note::A, &Note::C]) => Chord::F,
+        ThreeNoteChord::new([&Note::F, &Note::GsharpAflat, &Note::C]) => Chord::Fm,
+        ThreeNoteChord::new([&Note::G, &Note::B, &Note::D]) => Chord::G,
+        ThreeNoteChord::new([&Note::G, &Note::ASharpBFlat, &Note::D]) => Chord::Gm,
+        ThreeNoteChord::new([&Note::A, &Note::CsharpDflat, &Note::E]) => Chord::A,
+        ThreeNoteChord::new([&Note::A, &Note::C, &Note::E]) => Chord::Am,
+        ThreeNoteChord::new([&Note::B, &Note::DsharpEflat, &Note::FsharpGflat]) => Chord::B,
+        ThreeNoteChord::new([&Note::B, &Note::D, &Note::FsharpGflat]) => Chord::Bm
+
+    }
+}
+
+pub fn get_chords_from_notes(notes: HashSet<Note>) {
+    let chords = generate_chord_map();
+    let notes: Vec<Note> = notes.into_iter().collect();
+    let note_combinations = get_note_combinations(&notes);
+
+    for combination in note_combinations {
+        match chords.get(&combination) {
+            Some(chord) => println!("chord pressed: {:?}", chord),
+            _ => println!("nothing"),
+        }
+    }
+}
+
+fn get_note_combinations<'a>(notes: &'a Vec<Note>) -> Vec<ThreeNoteChord> {
+    let mut vec: Vec<[&Note; 3]> = vec![];
+
+    for i in 0..notes.len() {
+        for j in i + 1..notes.len() {
+            for k in j + 1..notes.len() {
+                vec.push([&notes[i], &notes[j], &notes[k]]);
+            }
+        }
+    }
+
+    vec.iter()
+        .map(|notes| ThreeNoteChord::new(*notes))
+        .collect()
 }

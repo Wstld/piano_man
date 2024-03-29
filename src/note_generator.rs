@@ -4,7 +4,7 @@ use winit::{
     keyboard::Key,
 };
 
-use crate::music_entities::{Note, Octave};
+use crate::music_entities::{get_chords_from_notes, Note, Octave};
 
 const ACCEPTED_NOTE_KEYS: [&str; 12] = ["a", "s", "d", "f", "g", "h", "j", "k", "l", "ö", "ä", "'"];
 const ACCEPTED_OCTAVE_KEYS: [&str; 6] = ["1", "2", "3", "4", "5", "6"];
@@ -54,6 +54,10 @@ impl NoteGenerator {
                 if let Some(note) = note {
                     if state.is_pressed() {
                         self.note_storage.add_note(note);
+                        if self.note_storage.pressed_keys.len() >= 3 {
+                            //Should be borrowed.
+                            get_chords_from_notes(self.note_storage.pressed_keys.clone())
+                        }
                     } else {
                         self.note_storage.remove_note(note);
                     }
