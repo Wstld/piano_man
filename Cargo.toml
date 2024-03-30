@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 winit = "0.29.15"
 maplit = "1.0.2"
+cpal = "0.15.3"
