@@ -135,4 +135,12 @@ impl NoteGenerator {
             }
         }
     }
+
+    pub fn get_note(&mut self) -> Option<Note> {
+        if self.note_storage.pressed_keys.is_empty() {
+            None
+        } else {
+            self.note_storage.pressed_keys.iter().next().copied()
+        }
+    }
 }

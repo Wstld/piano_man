@@ -27,11 +27,20 @@ use winit::{
 
 fn add_to_buffer_que(frame: Vec<f32>, buffer_que: &Arc<Mutex<Vec<f32>>>) {
     buffer_que.lock().expect("Nope").extend(frame);
-    thread::sleep(Duration::from_secs_f32(0.01));
+
+    // pause main thread to play audio from background thread.
+    thread::sleep(Duration::from_secs_f32(0.001));
 }
 fn main() {
+    // TODO:
+    // Remove copying of instances where possible.
+    // Mix audio when multiple keys pressed.
+    // Create multiple streams and a que system for faster key tap response.
+    // Make sure holding keys don't repeat sound.
+
     let event_loop = EventLoop::new().unwrap();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
+
     let mut note_generator = NoteGenerator::new();
 
     let mut buffer: Vec<f32> = Vec::new();
@@ -41,60 +50,83 @@ fn main() {
 
     stream.play().unwrap();
 
-    // ControlFlow::Poll continuously runs the event loop, even if the OS hasn't
-    // dispatched any events. This is ideal for games and similar applications.
-    event_loop.set_control_flow(ControlFlow::Poll);
-
-    // ControlFlow::Wait pauses the event loop if no events are available to process.
-    // This is ideal for non-game applications that only update in response to user
-    // input, and uses significantly less power/CPU time than ControlFlow::Poll.
     event_loop.set_control_flow(ControlFlow::Wait);
 
-    let _ = event_loop.run(move |event, elwt| {
-        match event {
-            Event::WindowEvent {
-                event: WindowEvent::CloseRequested,
-                ..
-            } => {
-                println!("The close button was pressed; stopping");
-                elwt.exit();
-            }
-            Event::WindowEvent {
-                event: WindowEvent::KeyboardInput { event, .. },
-                ..
-            } => {
-                handle_key_event(event, &mut note_generator);
-            }
-
-            Event::AboutToWait => {
-                // Application update code.
-
-                // Queue a RedrawRequested event.
-                //
-                // You only need to call this if you've determined that you need to redraw in
-                // applications which do not always need to. Applications that redraw continuously
-                // can render here instead.
-                window.request_redraw();
-            }
-            Event::WindowEvent {
-                event: WindowEvent::RedrawRequested,
-                ..
-            } => {
-                // Redraw the application.
-                //
-                // It's preferable for applications that do not render continuously to render in
-                // this event rather than in AboutToWait, since rendering in here allows
-                // the program to gracefully handle redraws requested by the OS.
-            }
-            _ => (),
+    let _ = event_loop.run(move |event, elwt| match event {
+        Event::WindowEvent {
+            event: WindowEvent::CloseRequested,
+            ..
+        } => {
+            println!("The close button was pressed; stopping");
+            elwt.exit();
         }
+        Event::WindowEvent {
+            event: WindowEvent::KeyboardInput { event, .. },
+            ..
+        } => {
+            if let Some(note) = handle_key_event(event, &mut note_generator) {
+                match note {
+                    Note::A => add_to_buffer_que(
+                        AudioFile::new("a3.mp3", note).f32_parsed_audio,
+                        &buffer_que,
+                    ),
+                    Note::ASharpBFlat => add_to_buffer_que(
+                        AudioFile::new("a-3.mp3", note).f32_parsed_audio,
+                        &buffer_que,
+                    ),
+                    Note::B => add_to_buffer_que(
+                        AudioFile::new("b3.mp3", note).f32_parsed_audio,
+                        &buffer_que,
+                    ),
+                    Note::C => add_to_buffer_que(
+                        AudioFile::new("c3.mp3", note).f32_parsed_audio,
+                        &buffer_que,
+                    ),
+                    Note::CsharpDflat => add_to_buffer_que(
+                        AudioFile::new("c-3.mp3", note).f32_parsed_audio,
+                        &buffer_que,
+                    ),
+                    Note::D => add_to_buffer_que(
+                        AudioFile::new("d3.mp3", note).f32_parsed_audio,
+                        &buffer_que,
+                    ),
+                    Note::DsharpEflat => add_to_buffer_que(
+                        AudioFile::new("d-3.mp3", note).f32_parsed_audio,
+                        &buffer_que,
+                    ),
+                    Note::E => add_to_buffer_que(
+                        AudioFile::new("e3.mp3", note).f32_parsed_audio,
+                        &buffer_que,
+                    ),
+                    Note::F => add_to_buffer_que(
+                        AudioFile::new("f3.mp3", note).f32_parsed_audio,
+                        &buffer_que,
+                    ),
+                    Note::FsharpGflat => add_to_buffer_que(
+                        AudioFile::new("f-3.mp3", note).f32_parsed_audio,
+                        &buffer_que,
+                    ),
+                    Note::G => add_to_buffer_que(
+                        AudioFile::new("g3.mp3", note).f32_parsed_audio,
+                        &buffer_que,
+                    ),
+                    Note::GsharpAflat => add_to_buffer_que(
+                        AudioFile::new("g-3.mp3", note).f32_parsed_audio,
+                        &buffer_que,
+                    ),
+                }
+            }
+        }
+        _ => (),
     });
 }
 
-fn handle_key_event(event: KeyEvent, note_generator: &mut NoteGenerator) {
+fn handle_key_event(event: KeyEvent, note_generator: &mut NoteGenerator) -> Option<Note> {
     if !event.repeat {
         note_generator.handle_input(event);
     }
+
+    note_generator.get_note()
 }
 
 fn setup_audio_out_put_stream(buffer: Arc<Mutex<Vec<f32>>>) -> Result<Stream, BuildStreamError> {
