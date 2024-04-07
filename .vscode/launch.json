@@ -1,0 +1,45 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'piano_man'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=piano_man",
+                    "--package=piano_man"
+                ],
+                "filter": {
+                    "name": "piano_man",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'piano_man'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=piano_man",
+                    "--package=piano_man"
+                ],
+                "filter": {
+                    "name": "piano_man",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
