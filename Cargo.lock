@@ -831,6 +831,7 @@ name = "piano_man"
 version = "0.1.0"
 dependencies = [
  "cpal",
+ "itertools",
  "maplit",
  "minimp3",
  "winit",

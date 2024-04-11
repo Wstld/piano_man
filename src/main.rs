@@ -19,8 +19,7 @@ use winit::{
 fn main() {
     // TODO:
     // Remove copying of instances where possible.
-    // Mix audio when multiple keys pressed.
-    // Make sure holding keys don't repeat sound.
+    // Debounce input.
 
     let event_loop = EventLoop::new().unwrap();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
@@ -42,56 +41,11 @@ fn main() {
             event: WindowEvent::KeyboardInput { event, .. },
             ..
         } => {
-            if let Some(note) = handle_key_event(event, &mut note_generator) {
-                match note {
-                    Note::A => {
-                        let audio = AudioFile::new("a3.mp3", note);
-                        buffer_que_manager.add_frames_to_que(audio.f32_parsed_audio)
-                    }
-                    Note::ASharpBFlat => {
-                        let audio = AudioFile::new("a-3.mp3", note);
-                        buffer_que_manager.add_frames_to_que(audio.f32_parsed_audio)
-                    }
-                    Note::B => {
-                        let audio = AudioFile::new("b3.mp3", note);
-                        buffer_que_manager.add_frames_to_que(audio.f32_parsed_audio)
-                    }
-                    Note::C => {
-                        let audio = AudioFile::new("c3.mp3", note);
-                        buffer_que_manager.add_frames_to_que(audio.f32_parsed_audio)
-                    }
-                    Note::CsharpDflat => {
-                        let audio = AudioFile::new("c-3.mp3", note);
-                        buffer_que_manager.add_frames_to_que(audio.f32_parsed_audio)
-                    }
-                    Note::D => {
-                        let audio = AudioFile::new("d3.mp3", note);
-                        buffer_que_manager.add_frames_to_que(audio.f32_parsed_audio)
-                    }
-                    Note::DsharpEflat => {
-                        let audio = AudioFile::new("d-3.mp3", note);
-                        buffer_que_manager.add_frames_to_que(audio.f32_parsed_audio)
-                    }
-                    Note::E => {
-                        let audio = AudioFile::new("e3.mp3", note);
-                        buffer_que_manager.add_frames_to_que(audio.f32_parsed_audio)
-                    }
-                    Note::F => {
-                        let audio = AudioFile::new("f3.mp3", note);
-                        buffer_que_manager.add_frames_to_que(audio.f32_parsed_audio)
-                    }
-                    Note::FsharpGflat => {
-                        let audio = AudioFile::new("f-3.mp3", note);
-                        buffer_que_manager.add_frames_to_que(audio.f32_parsed_audio)
-                    }
-                    Note::G => {
-                        let audio = AudioFile::new("g3.mp3", note);
-                        buffer_que_manager.add_frames_to_que(audio.f32_parsed_audio)
-                    }
-                    Note::GsharpAflat => {
-                        let audio = AudioFile::new("g-3.mp3", note);
-                        buffer_que_manager.add_frames_to_que(audio.f32_parsed_audio)
-                    }
+            if let Some(notes) = handle_key_event(event, &mut note_generator) {
+                if notes.len() > 1 {
+                    buffer_que_manager.add_frames_to_que(mix_notes(notes))
+                } else {
+                    buffer_que_manager.add_frames_to_que(get_frames_from_note(notes[0]))
                 }
             }
         }
@@ -99,12 +53,33 @@ fn main() {
     });
 }
 
-fn handle_key_event(event: KeyEvent, note_generator: &mut NoteGenerator) -> Option<Note> {
+fn get_frames_from_note(note: Note) -> Vec<f32> {
+    match note {
+        Note::A => AudioFile::new("a3.mp3", Note::A).f32_parsed_audio,
+        Note::ASharpBFlat => AudioFile::new("a-3.mp3", Note::ASharpBFlat).f32_parsed_audio,
+        Note::B => AudioFile::new("b3.mp3", Note::B).f32_parsed_audio,
+        Note::C => AudioFile::new("c3.mp3", Note::C).f32_parsed_audio,
+        Note::CsharpDflat => AudioFile::new("c-3.mp3", Note::CsharpDflat).f32_parsed_audio,
+        Note::D => AudioFile::new("d3.mp3", Note::D).f32_parsed_audio,
+        Note::DsharpEflat => AudioFile::new("d-3.mp3", Note::DsharpEflat).f32_parsed_audio,
+        Note::E => AudioFile::new("e3.mp3", Note::E).f32_parsed_audio,
+        Note::F => AudioFile::new("f3.mp3", Note::F).f32_parsed_audio,
+        Note::FsharpGflat => AudioFile::new("f-3.mp3", Note::FsharpGflat).f32_parsed_audio,
+        Note::G => AudioFile::new("g3.mp3", Note::G).f32_parsed_audio,
+        Note::GsharpAflat => AudioFile::new("g-3.mp3", Note::GsharpAflat).f32_parsed_audio,
+    }
+}
+
+fn handle_key_event(event: KeyEvent, note_generator: &mut NoteGenerator) -> Option<Vec<Note>> {
     if !event.repeat {
         note_generator.handle_input(event);
     }
 
-    note_generator.get_note()
+    if let Some(vector) = note_generator.get_notes() {
+        Some(vector)
+    } else {
+        None
+    }
 }
 
 struct AudioFile {
@@ -146,4 +121,34 @@ fn parse_mp3_file_to_f32(mp3: File) -> Vec<f32> {
         samples.extend(frame);
     }
     samples
+}
+
+fn mix_notes(notes: Vec<Note>) -> Vec<f32> {
+    let mut frames: Vec<Vec<f32>> = Vec::new();
+    for note in notes.into_iter() {
+        frames.push(get_frames_from_note(note));
+    }
+    frames.sort_by(|a, b| a.len().cmp(&b.len()));
+
+    merge_all_arrays(frames)
+}
+
+fn merge_all_arrays(mut arrays: Vec<Vec<f32>>) -> Vec<f32> {
+    if arrays.len() == 1 {
+        arrays.pop().unwrap()
+    } else {
+        let shortest = arrays.remove(0);
+        let longest = arrays.remove(1);
+        let merged = merge_arrays(shortest, longest);
+        arrays.insert(0, merged);
+        merge_all_arrays(arrays)
+    }
+}
+
+fn merge_arrays(shortest: Vec<f32>, longest: Vec<f32>) -> Vec<f32> {
+    shortest
+        .iter()
+        .zip(longest.iter())
+        .map(|(a, b)| a + b)
+        .collect()
 }

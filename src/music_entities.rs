@@ -84,9 +84,8 @@ fn generate_chord_map() -> HashMap<ThreeNoteChord, Chord> {
     }
 }
 
-pub fn get_chords_from_notes(notes: HashSet<Note>) {
+pub fn get_chords_from_notes(notes: Vec<Note>) {
     let chords = generate_chord_map();
-    let notes: Vec<Note> = notes.into_iter().collect();
     let note_combinations = get_note_combinations(&notes);
 
     for combination in note_combinations {

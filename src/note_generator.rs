@@ -10,23 +10,25 @@ const ACCEPTED_NOTE_KEYS: [&str; 12] = ["a", "s", "d", "f", "g", "h", "j", "k", 
 const ACCEPTED_OCTAVE_KEYS: [&str; 6] = ["1", "2", "3", "4", "5", "6"];
 
 struct NoteStorage {
-    pressed_keys: HashSet<Note>,
+    pressed_keys: Vec<Note>,
 }
 
 impl NoteStorage {
     fn new() -> Self {
-        let pressed_keys = HashSet::new();
+        let pressed_keys = Vec::new();
         NoteStorage { pressed_keys }
     }
 
     fn add_note(&mut self, note: Note) {
         if !self.pressed_keys.contains(&note) {
-            self.pressed_keys.insert(note);
+            self.pressed_keys.push(note);
         }
     }
 
     fn remove_note(&mut self, note: Note) {
-        self.pressed_keys.remove(&note);
+        if let Some(index) = self.pressed_keys.iter().position(|&x| x == note) {
+            self.pressed_keys.remove(index);
+        }
     }
 }
 
@@ -136,11 +138,11 @@ impl NoteGenerator {
         }
     }
 
-    pub fn get_note(&mut self) -> Option<Note> {
+    pub fn get_notes(&mut self) -> Option<Vec<Note>> {
         if self.note_storage.pressed_keys.is_empty() {
             None
         } else {
-            self.note_storage.pressed_keys.iter().next().copied()
+            Some(self.note_storage.pressed_keys.drain(0..).collect())
         }
     }
 }
