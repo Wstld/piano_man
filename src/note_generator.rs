@@ -8,7 +8,7 @@ use crate::music_entities::{get_chords_from_notes, Note, Octave};
 
 const ACCEPTED_NOTE_KEYS: [&str; 12] = ["a", "s", "d", "f", "g", "h", "j", "k", "l", "ö", "ä", "'"];
 const ACCEPTED_OCTAVE_KEYS: [&str; 6] = ["1", "2", "3", "4", "5", "6"];
-
+#[derive(Clone)]
 struct NoteStorage {
     pressed_keys: Vec<Note>,
 }
@@ -31,7 +31,7 @@ impl NoteStorage {
         }
     }
 }
-
+#[derive(Clone)]
 pub struct NoteGenerator {
     note_storage: NoteStorage,
     current_octave: Octave,
@@ -60,8 +60,6 @@ impl NoteGenerator {
                             //Should be borrowed.
                             get_chords_from_notes(self.note_storage.pressed_keys.clone())
                         }
-                    } else {
-                        self.note_storage.remove_note(note);
                     }
                 }
             }
@@ -138,11 +136,7 @@ impl NoteGenerator {
         }
     }
 
-    pub fn get_notes(&mut self) -> Option<Vec<Note>> {
-        if self.note_storage.pressed_keys.is_empty() {
-            None
-        } else {
-            Some(self.note_storage.pressed_keys.drain(0..).collect())
-        }
+    pub fn get_notes(&mut self) -> Vec<Note> {
+        self.note_storage.pressed_keys.drain(0..).collect()
     }
 }

@@ -4,7 +4,7 @@ use std::hash::{Hash, Hasher};
 
 use maplit::hashmap;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Octave {
     C1,
     C2,

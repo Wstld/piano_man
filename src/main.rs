@@ -3,9 +3,20 @@ mod music_entities;
 mod note_generator;
 
 use core::f32;
-use std::{fs::File, hash::Hash, io::BufReader};
+use tokio::{self, time::sleep};
 
-use buffer_que_manager::{BufferQueManager, DefaultBufferQueManager};
+use std::{
+    fs::File,
+    hash::Hash,
+    io::BufReader,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+    time::Duration,
+};
+
+use buffer_que_manager::DefaultBufferQueManager;
 
 use minimp3::Decoder;
 use music_entities::Note;
@@ -16,7 +27,9 @@ use winit::{
     window::WindowBuilder,
 };
 
-fn main() {
+use crate::buffer_que_manager::BufferQueManager;
+#[tokio::main]
+async fn main() {
     // TODO:
     // Remove copying of instances where possible.
     // Debounce input.
@@ -24,10 +37,11 @@ fn main() {
     let event_loop = EventLoop::new().unwrap();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
 
-    let mut note_generator = NoteGenerator::new();
+    let note_generator = Arc::new(Mutex::new(NoteGenerator::new()));
     let mut buffer_que_manager = DefaultBufferQueManager::new();
+    let mediator_key_storage: Arc<Mutex<Vec<KeyEvent>>> = Arc::new(Mutex::new(Vec::new()));
 
-    event_loop.set_control_flow(ControlFlow::Wait);
+    event_loop.set_control_flow(ControlFlow::Poll);
 
     let _ = event_loop.run(move |event, elwt| match event {
         Event::WindowEvent {
@@ -41,15 +55,22 @@ fn main() {
             event: WindowEvent::KeyboardInput { event, .. },
             ..
         } => {
-            if let Some(notes) = handle_key_event(event, &mut note_generator) {
-                if notes.len() > 1 {
-                    buffer_que_manager.add_frames_to_que(mix_notes(notes))
-                } else {
-                    buffer_que_manager.add_frames_to_que(get_frames_from_note(notes[0]))
-                }
-            }
+            let note_generator_arc_clone = Arc::clone(&note_generator);
+            let key_storage = Arc::clone(&mediator_key_storage);
+
+            tokio::task::spawn(async {
+                handle_input_debounced(
+                    Duration::from_secs_f32(0.1),
+                    event,
+                    note_generator_arc_clone,
+                    key_storage,
+                )
+                .await;
+            });
+
+            add_notes_to_buffer_que(Arc::clone(&note_generator), &mut buffer_que_manager);
         }
-        _ => (),
+        _ => add_notes_to_buffer_que(Arc::clone(&note_generator), &mut buffer_que_manager),
     });
 }
 
@@ -70,15 +91,30 @@ fn get_frames_from_note(note: Note) -> Vec<f32> {
     }
 }
 
-fn handle_key_event(event: KeyEvent, note_generator: &mut NoteGenerator) -> Option<Vec<Note>> {
-    if !event.repeat {
-        note_generator.handle_input(event);
-    }
+fn add_notes_to_buffer_que(
+    note_generator: Arc<Mutex<NoteGenerator>>,
+    buffer_que_manager: &mut DefaultBufferQueManager,
+) {
+    if let Ok(mut notes) = note_generator.lock() {
+        let notes = notes.get_notes();
 
-    if let Some(vector) = note_generator.get_notes() {
-        Some(vector)
-    } else {
-        None
+        if notes.len() >= 2 {
+            println!("multi");
+            buffer_que_manager.add_frames_to_que(mix_notes(notes));
+        } else if notes.len() == 1 {
+            println!("single");
+            buffer_que_manager.add_frames_to_que(get_frames_from_note(notes[0]));
+        }
+    }
+}
+
+fn handle_key_event(events: Vec<KeyEvent>, note_generator: &mut NoteGenerator) {
+    if !events.is_empty() {
+        for event in events {
+            if !event.repeat {
+                note_generator.handle_input(event);
+            }
+        }
     }
 }
 
@@ -138,7 +174,7 @@ fn merge_all_arrays(mut arrays: Vec<Vec<f32>>) -> Vec<f32> {
         arrays.pop().unwrap()
     } else {
         let shortest = arrays.remove(0);
-        let longest = arrays.remove(1);
+        let longest = arrays.remove(0);
         let merged = merge_arrays(shortest, longest);
         arrays.insert(0, merged);
         merge_all_arrays(arrays)
@@ -151,4 +187,33 @@ fn merge_arrays(shortest: Vec<f32>, longest: Vec<f32>) -> Vec<f32> {
         .zip(longest.iter())
         .map(|(a, b)| a + b)
         .collect()
+}
+
+async fn handle_input_debounced(
+    delay: Duration,
+    event: KeyEvent,
+    note_generator: Arc<Mutex<NoteGenerator>>,
+    key_storage: Arc<Mutex<Vec<KeyEvent>>>,
+) {
+    static IS_RUNNING: AtomicBool = AtomicBool::new(false);
+    {
+        if let Ok(mut key_storage) = key_storage.lock() {
+            key_storage.push(event);
+        }
+    }
+    match IS_RUNNING.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst) {
+        Ok(_) => {}
+        Err(_) => return,
+    }
+    sleep(delay).await;
+
+    IS_RUNNING.store(false, Ordering::SeqCst);
+    if let Ok(mut note_generator) = note_generator.lock() {
+        match key_storage.lock() {
+            Ok(mut key_storage) => {
+                handle_key_event(key_storage.drain(0..).collect(), &mut note_generator)
+            }
+            Err(_) => todo!(),
+        }
+    }
 }

@@ -126,7 +126,6 @@ fn setup_audio_out_put_stream(buffer: Arc<Mutex<Vec<f32>>>) -> Result<Stream, Bu
         .expect("no supported config")
         .with_max_sample_rate();
 
-    println!("{:#?}", supported_config);
     let sample_format = supported_config.sample_format();
     let config = supported_config.into();
     let err_fn = |err| eprintln!("an error occurred on the output audio stream: {}", err);
