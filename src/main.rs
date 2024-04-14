@@ -1,18 +1,15 @@
 mod buffer_que_manager;
+mod input_handler;
 mod music_entities;
 mod note_generator;
 
 use core::f32;
-use tokio::{self, time::sleep};
 
 use std::{
     fs::File,
     hash::Hash,
     io::BufReader,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
-    },
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
@@ -21,25 +18,32 @@ use buffer_que_manager::DefaultBufferQueManager;
 use minimp3::Decoder;
 use music_entities::Note;
 use note_generator::NoteGenerator;
+
 use winit::{
-    event::{Event, KeyEvent, WindowEvent},
+    event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
 };
 
-use crate::buffer_que_manager::BufferQueManager;
+use crate::{buffer_que_manager::BufferQueManager, input_handler::InputHandler};
 #[tokio::main]
 async fn main() {
+    const ACCEPTED_NOTE_KEYS: [&str; 12] =
+        ["a", "s", "d", "f", "g", "h", "j", "k", "l", "ö", "ä", "'"];
+    const ACCEPTED_OCTAVE_KEYS: [&str; 6] = ["1", "2", "3", "4", "5", "6"];
     // TODO:
+    // Add octave switching.
     // Remove copying of instances where possible.
-    // Debounce input.
 
     let event_loop = EventLoop::new().unwrap();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
 
     let note_generator = Arc::new(Mutex::new(NoteGenerator::new()));
     let mut buffer_que_manager = DefaultBufferQueManager::new();
-    let mediator_key_storage: Arc<Mutex<Vec<KeyEvent>>> = Arc::new(Mutex::new(Vec::new()));
+    let input_handler = Arc::new(Mutex::new(InputHandler::new(
+        ACCEPTED_NOTE_KEYS,
+        ACCEPTED_OCTAVE_KEYS,
+    )));
 
     event_loop.set_control_flow(ControlFlow::Poll);
 
@@ -55,22 +59,27 @@ async fn main() {
             event: WindowEvent::KeyboardInput { event, .. },
             ..
         } => {
-            let note_generator_arc_clone = Arc::clone(&note_generator);
-            let key_storage = Arc::clone(&mediator_key_storage);
-
+            {
+                // Store input and drop lock.
+                if let Ok(mut input_handler) = input_handler.lock() {
+                    input_handler.add_input_to_mediator(event);
+                }
+            }
+            // Debounce input handling and then move input to storage.
+            let input_handler_clone = Arc::clone(&input_handler);
             tokio::task::spawn(async {
-                handle_input_debounced(
-                    Duration::from_secs_f32(0.1),
-                    event,
-                    note_generator_arc_clone,
-                    key_storage,
+                InputHandler::move_input_from_mediator_to_storage(
+                    input_handler_clone,
+                    Duration::from_secs_f32(0.24),
                 )
-                .await;
             });
-
-            add_notes_to_buffer_que(Arc::clone(&note_generator), &mut buffer_que_manager);
+            // add notes to buffer que on detected input.
+            add_notes_to_buffer_que(&input_handler, &note_generator, &mut buffer_que_manager);
         }
-        _ => add_notes_to_buffer_que(Arc::clone(&note_generator), &mut buffer_que_manager),
+        _ => {
+            // add notes to buffer que on poll loop.
+            add_notes_to_buffer_que(&input_handler, &note_generator, &mut buffer_que_manager);
+        }
     });
 }
 
@@ -92,27 +101,21 @@ fn get_frames_from_note(note: Note) -> Vec<f32> {
 }
 
 fn add_notes_to_buffer_que(
-    note_generator: Arc<Mutex<NoteGenerator>>,
+    input_handler: &Arc<Mutex<InputHandler>>,
+    note_generator: &Arc<Mutex<NoteGenerator>>,
     buffer_que_manager: &mut DefaultBufferQueManager,
 ) {
-    if let Ok(mut notes) = note_generator.lock() {
-        let notes = notes.get_notes();
+    if let Ok(mut input_handler) = input_handler.lock() {
+        let input = input_handler.get_inputs();
+        if let Ok(mut note_generator) = note_generator.lock() {
+            let notes = note_generator.get_notes_from_keys(input);
 
-        if notes.len() >= 2 {
-            println!("multi");
-            buffer_que_manager.add_frames_to_que(mix_notes(notes));
-        } else if notes.len() == 1 {
-            println!("single");
-            buffer_que_manager.add_frames_to_que(get_frames_from_note(notes[0]));
-        }
-    }
-}
-
-fn handle_key_event(events: Vec<KeyEvent>, note_generator: &mut NoteGenerator) {
-    if !events.is_empty() {
-        for event in events {
-            if !event.repeat {
-                note_generator.handle_input(event);
+            if notes.len() >= 2 {
+                println!("multi");
+                buffer_que_manager.add_frames_to_que(mix_notes(notes));
+            } else if notes.len() == 1 {
+                println!("single");
+                buffer_que_manager.add_frames_to_que(get_frames_from_note(notes[0]));
             }
         }
     }
@@ -187,33 +190,4 @@ fn merge_arrays(shortest: Vec<f32>, longest: Vec<f32>) -> Vec<f32> {
         .zip(longest.iter())
         .map(|(a, b)| a + b)
         .collect()
-}
-
-async fn handle_input_debounced(
-    delay: Duration,
-    event: KeyEvent,
-    note_generator: Arc<Mutex<NoteGenerator>>,
-    key_storage: Arc<Mutex<Vec<KeyEvent>>>,
-) {
-    static IS_RUNNING: AtomicBool = AtomicBool::new(false);
-    {
-        if let Ok(mut key_storage) = key_storage.lock() {
-            key_storage.push(event);
-        }
-    }
-    match IS_RUNNING.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst) {
-        Ok(_) => {}
-        Err(_) => return,
-    }
-    sleep(delay).await;
-
-    IS_RUNNING.store(false, Ordering::SeqCst);
-    if let Ok(mut note_generator) = note_generator.lock() {
-        match key_storage.lock() {
-            Ok(mut key_storage) => {
-                handle_key_event(key_storage.drain(0..).collect(), &mut note_generator)
-            }
-            Err(_) => todo!(),
-        }
-    }
 }

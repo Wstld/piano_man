@@ -1,93 +1,13 @@
-use std::collections::{HashMap, HashSet};
-use winit::{
-    event::{ElementState, KeyEvent},
-    keyboard::Key,
-};
+use winit::event::KeyEvent;
 
-use crate::music_entities::{get_chords_from_notes, Note, Octave};
+use crate::music_entities::{Note, Octave};
 
-const ACCEPTED_NOTE_KEYS: [&str; 12] = ["a", "s", "d", "f", "g", "h", "j", "k", "l", "ö", "ä", "'"];
-const ACCEPTED_OCTAVE_KEYS: [&str; 6] = ["1", "2", "3", "4", "5", "6"];
 #[derive(Clone)]
-struct NoteStorage {
-    pressed_keys: Vec<Note>,
-}
-
-impl NoteStorage {
-    fn new() -> Self {
-        let pressed_keys = Vec::new();
-        NoteStorage { pressed_keys }
-    }
-
-    fn add_note(&mut self, note: Note) {
-        if !self.pressed_keys.contains(&note) {
-            self.pressed_keys.push(note);
-        }
-    }
-
-    fn remove_note(&mut self, note: Note) {
-        if let Some(index) = self.pressed_keys.iter().position(|&x| x == note) {
-            self.pressed_keys.remove(index);
-        }
-    }
-}
-#[derive(Clone)]
-pub struct NoteGenerator {
-    note_storage: NoteStorage,
-    current_octave: Octave,
-}
+pub struct NoteGenerator {}
 
 impl NoteGenerator {
     pub fn new() -> Self {
-        let note_storage = NoteStorage::new();
-        let current_octave = Octave::C1;
-
-        NoteGenerator {
-            note_storage,
-            current_octave,
-        }
-    }
-
-    fn handle_valid_input(&mut self, input: (Key, ElementState)) {
-        let (key, state) = input;
-        match key.to_text().unwrap() {
-            key if ACCEPTED_NOTE_KEYS.contains(&key) => {
-                let note = self.map_str_to_note(key);
-                if let Some(note) = note {
-                    if state.is_pressed() {
-                        self.note_storage.add_note(note);
-                        if self.note_storage.pressed_keys.len() >= 3 {
-                            //Should be borrowed.
-                            get_chords_from_notes(self.note_storage.pressed_keys.clone())
-                        }
-                    }
-                }
-            }
-            key if ACCEPTED_OCTAVE_KEYS.contains(&key) => {
-                let octave = self.map_key_code_to_octave(key);
-                self.current_octave = octave;
-                println!("current octave: {:?}", self.current_octave)
-            }
-            _ => {
-                println!("Not an accepted input")
-            }
-        }
-    }
-
-    fn handle_invalid_input(&self) {
-        println!("Not a valid key pressed")
-    }
-
-    fn validate_input(&self, key: &Key) -> bool {
-        match key.to_text() {
-            Some(char) => {
-                ACCEPTED_NOTE_KEYS.contains(&char) || ACCEPTED_OCTAVE_KEYS.contains(&char)
-            }
-            None => {
-                self.handle_invalid_input();
-                false
-            }
-        }
+        NoteGenerator {}
     }
 
     fn map_str_to_note(&self, key: &str) -> Option<Note> {
@@ -120,23 +40,13 @@ impl NoteGenerator {
         }
     }
 
-    pub fn handle_input(&mut self, event: KeyEvent) {
-        match event {
-            KeyEvent {
-                logical_key, state, ..
-            } => {
-                if self.validate_input(&logical_key) {
-                    self.handle_valid_input((logical_key, state));
-                    println!("current notes: {:#?}", self.note_storage.pressed_keys);
-                }
-            }
-            _ => {
-                println!("Not an valid key")
+    pub fn get_notes_from_keys(&mut self, key_events: Vec<KeyEvent>) -> Vec<Note> {
+        let mut notes_to_return: Vec<Note> = Vec::new();
+        for event in key_events {
+            if let Some(note) = self.map_str_to_note(event.logical_key.to_text().unwrap()) {
+                notes_to_return.push(note)
             }
         }
-    }
-
-    pub fn get_notes(&mut self) -> Vec<Note> {
-        self.note_storage.pressed_keys.drain(0..).collect()
+        notes_to_return
     }
 }
