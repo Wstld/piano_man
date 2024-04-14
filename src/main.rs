@@ -30,7 +30,7 @@ use crate::{buffer_que_manager::BufferQueManager, input_handler::InputHandler};
 async fn main() {
     const ACCEPTED_NOTE_KEYS: [&str; 12] =
         ["a", "s", "d", "f", "g", "h", "j", "k", "l", "ö", "ä", "'"];
-    const ACCEPTED_OCTAVE_KEYS: [&str; 6] = ["1", "2", "3", "4", "5", "6"];
+    const ACCEPTED_OCTAVE_KEYS: [&str; 3] = ["3", "4", "5"];
     // TODO:
     // Add octave switching.
     // Remove copying of instances where possible.
@@ -83,20 +83,71 @@ async fn main() {
     });
 }
 
-fn get_frames_from_note(note: Note) -> Vec<f32> {
+fn get_frames_from_note(note: Note, selected_octave: u8) -> Vec<f32> {
     match note {
-        Note::A => AudioFile::new("a3.mp3", Note::A).f32_parsed_audio,
-        Note::ASharpBFlat => AudioFile::new("a-3.mp3", Note::ASharpBFlat).f32_parsed_audio,
-        Note::B => AudioFile::new("b3.mp3", Note::B).f32_parsed_audio,
-        Note::C => AudioFile::new("c3.mp3", Note::C).f32_parsed_audio,
-        Note::CsharpDflat => AudioFile::new("c-3.mp3", Note::CsharpDflat).f32_parsed_audio,
-        Note::D => AudioFile::new("d3.mp3", Note::D).f32_parsed_audio,
-        Note::DsharpEflat => AudioFile::new("d-3.mp3", Note::DsharpEflat).f32_parsed_audio,
-        Note::E => AudioFile::new("e3.mp3", Note::E).f32_parsed_audio,
-        Note::F => AudioFile::new("f3.mp3", Note::F).f32_parsed_audio,
-        Note::FsharpGflat => AudioFile::new("f-3.mp3", Note::FsharpGflat).f32_parsed_audio,
-        Note::G => AudioFile::new("g3.mp3", Note::G).f32_parsed_audio,
-        Note::GsharpAflat => AudioFile::new("g-3.mp3", Note::GsharpAflat).f32_parsed_audio,
+        Note::A => {
+            AudioFile::new(&format!("a{}.mp3", selected_octave.to_string()), Note::A)
+                .f32_parsed_audio
+        }
+        Note::ASharpBFlat => {
+            AudioFile::new(
+                &format!("a-{}.mp3", selected_octave.to_string()),
+                Note::ASharpBFlat,
+            )
+            .f32_parsed_audio
+        }
+        Note::B => {
+            AudioFile::new(&format!("b{}.mp3", selected_octave.to_string()), Note::B)
+                .f32_parsed_audio
+        }
+        Note::C => {
+            AudioFile::new(&format!("c{}.mp3", selected_octave.to_string()), Note::C)
+                .f32_parsed_audio
+        }
+        Note::CsharpDflat => {
+            AudioFile::new(
+                &format!("c-{}.mp3", selected_octave.to_string()),
+                Note::CsharpDflat,
+            )
+            .f32_parsed_audio
+        }
+        Note::D => {
+            AudioFile::new(&format!("d{}.mp3", selected_octave.to_string()), Note::D)
+                .f32_parsed_audio
+        }
+        Note::DsharpEflat => {
+            AudioFile::new(
+                &format!("d-{}.mp3", selected_octave.to_string()),
+                Note::DsharpEflat,
+            )
+            .f32_parsed_audio
+        }
+        Note::E => {
+            AudioFile::new(&format!("e{}.mp3", selected_octave.to_string()), Note::E)
+                .f32_parsed_audio
+        }
+        Note::F => {
+            AudioFile::new(&format!("f{}.mp3", selected_octave.to_string()), Note::F)
+                .f32_parsed_audio
+        }
+        Note::FsharpGflat => {
+            AudioFile::new(
+                &format!("f-{}.mp3", selected_octave.to_string()),
+                Note::FsharpGflat,
+            )
+            .f32_parsed_audio
+        }
+        Note::G => {
+            AudioFile::new(&format!("g{}.mp3", selected_octave.to_string()), Note::G)
+                .f32_parsed_audio
+        }
+        Note::GsharpAflat => {
+            AudioFile::new(
+                &format!("g-{}.mp3", selected_octave.to_string()),
+                Note::GsharpAflat,
+            )
+            .f32_parsed_audio
+        }
     }
 }
 
@@ -107,15 +158,17 @@ fn add_notes_to_buffer_que(
 ) {
     if let Ok(mut input_handler) = input_handler.lock() {
         let input = input_handler.get_inputs();
+        let selected_octave = input_handler.get_selected_octave();
         if let Ok(mut note_generator) = note_generator.lock() {
             let notes = note_generator.get_notes_from_keys(input);
 
             if notes.len() >= 2 {
                 println!("multi");
-                buffer_que_manager.add_frames_to_que(mix_notes(notes));
+                buffer_que_manager.add_frames_to_que(mix_notes(notes, selected_octave));
             } else if notes.len() == 1 {
                 println!("single");
-                buffer_que_manager.add_frames_to_que(get_frames_from_note(notes[0]));
+                buffer_que_manager
+                    .add_frames_to_que(get_frames_from_note(notes[0], selected_octave));
             }
         }
     }
@@ -162,10 +215,10 @@ fn parse_mp3_file_to_f32(mp3: File) -> Vec<f32> {
     samples
 }
 
-fn mix_notes(notes: Vec<Note>) -> Vec<f32> {
+fn mix_notes(notes: Vec<Note>, selected_octave: u8) -> Vec<f32> {
     let mut frames: Vec<Vec<f32>> = Vec::new();
     for note in notes.into_iter() {
-        frames.push(get_frames_from_note(note));
+        frames.push(get_frames_from_note(note, selected_octave));
     }
     frames.sort_by(|a, b| a.len().cmp(&b.len()));
 
