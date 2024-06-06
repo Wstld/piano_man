@@ -1,4 +1,5 @@
 mod buffer_que_manager;
+mod gui_renderer;
 mod input_handler;
 mod music_entities;
 mod note_generator;
@@ -20,7 +21,7 @@ use music_entities::Note;
 use note_generator::NoteGenerator;
 
 use winit::{
-    event::{Event, WindowEvent},
+    event::{DeviceEvent, Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
 };
@@ -37,6 +38,7 @@ async fn main() {
 
     let event_loop = EventLoop::new().unwrap();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
+    let mut state = gui_renderer::State::new(&window).await;
 
     let note_generator = Arc::new(Mutex::new(NoteGenerator::new()));
     let mut buffer_que_manager = DefaultBufferQueManager::new();
@@ -49,6 +51,21 @@ async fn main() {
 
     let _ = event_loop.run(move |event, elwt| match event {
         Event::WindowEvent {
+            event: WindowEvent::RedrawRequested,
+            ..
+        } => {
+            state.update();
+            match state.render() {
+                Ok(_) => {}
+                // Reconfigure the surface if lost
+                Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
+                // The system is out of memory, we should probably quit
+                Err(wgpu::SurfaceError::OutOfMemory) => {}
+                // All other errors (Outdated, Timeout) should be resolved by the next frame
+                Err(e) => eprintln!("{:?}", e),
+            }
+        }
+        Event::WindowEvent {
             event: WindowEvent::CloseRequested,
             ..
         } => {
@@ -59,6 +76,7 @@ async fn main() {
             event: WindowEvent::KeyboardInput { event, .. },
             ..
         } => {
+            state.render_random_color();
             {
                 // Store input and drop lock.
                 if let Ok(mut input_handler) = input_handler.lock() {
@@ -76,6 +94,10 @@ async fn main() {
             // add notes to buffer que on detected input.
             add_notes_to_buffer_que(&input_handler, &note_generator, &mut buffer_que_manager);
         }
+        Event::WindowEvent {
+            event: WindowEvent::Resized(physical_size),
+            ..
+        } => state.resize(physical_size),
         _ => {
             // add notes to buffer que on poll loop.
             add_notes_to_buffer_que(&input_handler, &note_generator, &mut buffer_que_manager);
